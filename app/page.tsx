@@ -1,65 +1,127 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Booking } from "./components/Booking";
+import { Footer } from "./components/Footer";
+import { Gallery } from "./components/Gallery";
+import { Hero } from "./components/Hero";
+import { NavBar } from "./components/NavBar";
+import { Services } from "./components/Services";
+import { mergeContent } from "./lib/mergeContent";
+import { defaultContent } from "./lib/defaultContent";
+import { loadBookings, loadContent, saveBookings, getOccupiedSlots, BOOKINGS_KEY, normalizeBookingDate, normalizeBookingTime, onBookingsUpdated } from "./lib/storage";
+import type { BookingPayload, BookingRecord, SiteContent } from "./types/content";
+
+const randomId = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}`);
+
+const copyMessageToClipboard = async (text: string) => {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "absolute";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+};
+
+const buildWhatsAppText = (payload: BookingPayload) => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    `Halo Beneficial Haircut, saya ingin booking jadwal:\n\n` +
+    `Nama: *${payload.name}*\n` +
+    `No. WhatsApp: *${payload.phone}*\n` +
+    `Tanggal: *${payload.date}*\n` +
+    `Jam: *${payload.time}*\n` +
+    `Layanan: *${payload.service}*\n\n` +
+    `Apakah slot tersedia?`
+  );
+};
+
+export default function HomePage() {
+  const [content] = useState<SiteContent>(() => {
+    const stored = loadContent();
+    return stored ? mergeContent(stored) : mergeContent(defaultContent);
+  });
+  const [bookings, setBookings] = useState<BookingRecord[]>(() => loadBookings());
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [navShadow, setNavShadow] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setNavShadow(window.scrollY > 50);
+    onScroll();
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const handleBooking = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+
+    const rawDate = (data.get("date") as string) || "";
+    const rawTime = (data.get("time") as string) || "";
+    const payload: BookingPayload = {
+      name: (data.get("name") as string) || "",
+      phone: (data.get("phone") as string) || "",
+      date: normalizeBookingDate(rawDate),
+      time: normalizeBookingTime(rawTime),
+      service: (data.get("service") as string) || "",
+    };
+
+    const whatsappText = buildWhatsAppText(payload);
+    const phoneOwner = content.booking.phoneOwner;
+
+    const newBooking: BookingRecord = { id: randomId(), ...payload };
+    setBookings((prev) => {
+      const next = [newBooking, ...prev];
+      saveBookings(next);
+      return next;
+    });
+
+    copyMessageToClipboard(whatsappText).catch(() => {
+      /* best effort */
+    });
+
+    const whatsappUrl = `https://wa.me/${phoneOwner}?text=${encodeURIComponent(whatsappText)}`;
+    const opened = window.open(whatsappUrl, "_blank", "noopener");
+    if (!opened) {
+      window.location.href = whatsappUrl;
+    }
+
+    event.currentTarget.reset();
+  };
+
+  const occupiedSlots = useMemo(() => getOccupiedSlots(bookings), [bookings]);
+
+  // Sync with bookings added or removed from another tab.
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === BOOKINGS_KEY) {
+        setBookings(loadBookings());
+      }
+    };
+    const unsubscribe = onBookingsUpdated(() => {
+      setBookings(loadBookings());
+    });
+    window.addEventListener("storage", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      unsubscribe();
+    };
+  }, []);
+
+  return (
+    <div className="font-sans text-brand-black antialiased bg-white selection:bg-brand-red selection:text-white scroll-smooth">
+      <NavBar navShadow={navShadow} menuOpen={menuOpen} onToggleMenu={() => setMenuOpen(!menuOpen)} onClose={() => setMenuOpen(false)} />
+      <Hero data={content.hero} />
+      <Services services={content.services} />
+      <Gallery items={content.gallery} />
+      <Booking bookingTimes={content.booking.times} bookingInfo={content.booking} onSubmit={handleBooking} occupiedSlots={occupiedSlots} />
+      <Footer footer={content.footer} />
     </div>
   );
 }
