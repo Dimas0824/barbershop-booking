@@ -5,11 +5,12 @@ import { Booking } from "./components/Booking";
 import { Footer } from "./components/Footer";
 import { Gallery } from "./components/Gallery";
 import { Hero } from "./components/Hero";
+import { IdentifierOverlay } from "./components/IdentifierOverlay";
 import { NavBar } from "./components/NavBar";
 import { Services } from "./components/Services";
 import { mergeContent } from "./lib/mergeContent";
 import { defaultContent } from "./lib/defaultContent";
-import { loadBookings, loadContent, saveBookings, getOccupiedSlots, BOOKINGS_KEY, normalizeBookingDate, normalizeBookingTime, onBookingsUpdated } from "./lib/storage";
+import { CONTENT_KEY, loadBookings, loadContent, saveBookings, getOccupiedSlots, BOOKINGS_KEY, normalizeBookingDate, normalizeBookingTime, onBookingsUpdated, onContentUpdated } from "./lib/storage";
 import type { BookingPayload, BookingRecord, SiteContent } from "./types/content";
 
 const randomId = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}`);
@@ -43,10 +44,7 @@ const buildWhatsAppText = (payload: BookingPayload) => {
 };
 
 export default function HomePage() {
-  const [content] = useState<SiteContent>(() => {
-    const stored = loadContent();
-    return stored ? mergeContent(stored) : mergeContent(defaultContent);
-  });
+  const [content, setContent] = useState<SiteContent>(() => mergeContent(defaultContent));
   const [bookings, setBookings] = useState<BookingRecord[]>(() => loadBookings());
   const [menuOpen, setMenuOpen] = useState(false);
   const [navShadow, setNavShadow] = useState(false);
@@ -56,6 +54,25 @@ export default function HomePage() {
     onScroll();
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const refreshContent = () => {
+      const stored = loadContent();
+      setContent(stored ? mergeContent(stored) : mergeContent(defaultContent));
+    };
+    refreshContent();
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === CONTENT_KEY) {
+        refreshContent();
+      }
+    };
+    const unsubscribe = onContentUpdated(refreshContent);
+    window.addEventListener("storage", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      unsubscribe();
+    };
   }, []);
 
   const handleBooking = async (event: FormEvent<HTMLFormElement>) => {
@@ -122,6 +139,7 @@ export default function HomePage() {
       <Gallery items={content.gallery} />
       <Booking bookingTimes={content.booking.times} bookingInfo={content.booking} onSubmit={handleBooking} occupiedSlots={occupiedSlots} />
       <Footer footer={content.footer} />
+      <IdentifierOverlay />
     </div>
   );
 }

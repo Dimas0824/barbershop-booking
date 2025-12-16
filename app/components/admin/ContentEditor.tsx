@@ -1,3 +1,5 @@
+"use client";
+
 import type { ChangeEvent } from "react";
 import { Card } from "./Card";
 import { InputField } from "./InputField";
@@ -26,6 +28,19 @@ export function ContentEditor({ form, onChange, updateService, updateGallery, ad
       .map((value) => value.trim())
       .filter(Boolean);
     onChange("booking.times", times);
+  };
+
+  const handleGalleryUpload = (index: number, event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        updateGallery(index, "src", reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+    event.currentTarget.value = "";
   };
 
   return (
@@ -134,8 +149,23 @@ export function ContentEditor({ form, onChange, updateService, updateGallery, ad
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:border-transparent"
                 value={item.src || ""}
                 onChange={(event) => updateGallery(index, "src", event.target.value)}
-                placeholder="URL gambar"
+                placeholder="URL gambar atau tempel link Instagram"
               />
+              <label className="text-[11px] font-semibold text-gray-500">Atau unggah foto dari perangkat Anda</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => handleGalleryUpload(index, event)}
+                className="w-full rounded-lg text-xs text-gray-600"
+              />
+              {item.src && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-[11px] text-gray-500">Pratinjau saat ini</p>
+                  <div className="h-32 overflow-hidden rounded-xl border border-dashed border-gray-300">
+                    <img src={item.src} alt={item.title || `Gallery ${index + 1}`} className="h-full w-full object-cover" />
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

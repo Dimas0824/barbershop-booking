@@ -1,6 +1,6 @@
 import { BookingRecord, SiteContent } from "../types/content";
 
-const CONTENT_KEY = "beneficial-content";
+export const CONTENT_KEY = "beneficial-content";
 export const BOOKINGS_KEY = "beneficial-bookings";
 
 const getSafeWindow = (): Window | null =>
@@ -40,6 +40,7 @@ const normalizeTime = (value: string): string => {
 export const normalizeBookingTime = (value: string): string => normalizeTime(value);
 
 let bookingsChannel: BroadcastChannel | null = null;
+let contentChannel: BroadcastChannel | null = null;
 
 const getBookingsChannel = (): BroadcastChannel | null => {
     if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") return null;
@@ -49,8 +50,20 @@ const getBookingsChannel = (): BroadcastChannel | null => {
     return bookingsChannel;
 };
 
+const getContentChannel = (): BroadcastChannel | null => {
+    if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") return null;
+    if (!contentChannel) {
+        contentChannel = new BroadcastChannel("beneficial-content");
+    }
+    return contentChannel;
+};
+
 const notifyBookingsUpdated = () => {
     getBookingsChannel()?.postMessage({ type: "bookings:update" });
+};
+
+const notifyContentUpdated = () => {
+    getContentChannel()?.postMessage({ type: "content:update" });
 };
 
 export const onBookingsUpdated = (handler: () => void) => {
@@ -58,6 +71,18 @@ export const onBookingsUpdated = (handler: () => void) => {
     if (!channel) return () => {};
     const listener = (event: MessageEvent) => {
         if (event.data?.type === "bookings:update") {
+            handler();
+        }
+    };
+    channel.addEventListener("message", listener);
+    return () => channel.removeEventListener("message", listener);
+};
+
+export const onContentUpdated = (handler: () => void) => {
+    const channel = getContentChannel();
+    if (!channel) return () => {};
+    const listener = (event: MessageEvent) => {
+        if (event.data?.type === "content:update") {
             handler();
         }
     };
@@ -81,6 +106,7 @@ export const saveContent = (content: SiteContent): void => {
     if (!win) return;
     try {
         win.localStorage.setItem(CONTENT_KEY, JSON.stringify(content));
+        notifyContentUpdated();
     } catch {
         // ignore quota errors
     }
