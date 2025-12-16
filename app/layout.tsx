@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { IdentifierOverlay } from "./components/IdentifierOverlay";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,9 +33,8 @@ export default function RootLayout({
           referrerPolicy="no-referrer"
         />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <IdentifierOverlay />
         {children}
       </body>
     </html>
